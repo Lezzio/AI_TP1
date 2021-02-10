@@ -264,6 +264,31 @@ VEC * iterativeProcess(VEC * vec, SMAT * mat) {
     }
     return nextVec;
 }
+VEC *iterativeProcessv2(VEC *vec, SMAT *mat, VEC *a, VEC *e) {
+    double alpha = 0.85;
+
+    VEC * nextVec = v_new(vec->dim);
+    //Left operand
+    for(int i = 0; i < mat->m; i++) {
+        SROW * row = &mat->row[i];
+        for(int j = 0; j < row->nnz; j++) {
+            int c = row->col[j];
+            double v = row->val[j];
+            nextVec->e[c] += (vec->e[i] * v * alpha);
+        }
+    }
+    double factor = 0.0;
+    //Right operand
+    for(int i = 0; i < a->dim; i++) {
+        factor += vec->e[i] * a->e[i];
+    }
+    factor = (alpha * factor + 1 - alpha) / mat->m;
+    for(int i = 0; i < nextVec->dim; i++) {
+        nextVec->e[i] += factor;
+    }
+
+    return nextVec;
+}
 
 double NormVec(VEC * vec1, VEC * vec2){
     if(vec1->dim != vec2->dim){
@@ -281,13 +306,32 @@ int main()
   FILE *fp;
   SMAT *SM;
 
-  fp = fopen( "exemple.dat", "r" );
+  fp = fopen( "genetic.dat", "r" );
 
   SM = sm_input( fp );
   fclose( fp );
   sm_output( stdout, SM );;
 
   VEC * vec = v_new(SM->n);
+  VEC * a = v_new(SM->n);
+  VEC * e = v_new(SM->n);
+
+  for(int i = 0; i < e->dim; i++) {
+      e->e[i] = 1;
+  }
+
+    //Construct H
+    for(int i = 0; i < SM->n; i++) {
+        SROW * row = &(SM->row[i]);
+        for(int j = 0; j < row->nnz; j++) {
+            row->val[j] /= row->nnz;
+        }
+        if(row->nnz == 0) {
+            a->e[i] = 1;
+        } else {
+            a->e[i] = 0;
+        }
+    }
 
     //Initial vec (r)
     for(int i = 0; i < vec->dim; i++) {
@@ -297,44 +341,18 @@ int main()
     v_output(stdout, vec);
     printf("\n");
 
-  //Construct S
-  for(int i = 0; i < SM->n; i++) {
-      SROW * row = &(SM->row[i]);
-      for(int j = 0; j < row->nnz; j++) {
-          row->val[j] /= row->nnz;
-      }
-      /*
-        if(row->nnz == 0) {
+    printf("BEFORE ITERATIVE \n");
+    sm_output(stdout, SM);
+    v_output(stdout, vec);
 
-            row->nnz = SM->n;
+    //Iterative process
+    for(int i = 0; i < 100; i++) {
+        vec = iterativeProcessv2(vec, SM, a, e);
+    }
 
-            free(row->col);
-            free(row->val);
-            row->col = malloc(sizeof(u_int) * SM->n);
-            row->val = malloc(sizeof(u_int) * SM->n);
-            for(int k = 0; k < SM->n; k++) {
-                row->col[k] = k;
-                row->val[k] = 1.0 / SM->n;
-            }
+    v_output(stdout, vec);
 
-        }
-        */
+    sm_free( SM );
 
-}
-
-
-  printf("BEFORE ITERATIVE \n");
-  sm_output(stdout, SM);
-  v_output(stdout, vec);
-
-  //Iterative process
-  for(int i = 0; i < 10; i++) {
-      vec = iterativeProcess(vec, SM);
-  }
-
-  v_output(stdout, vec);
-
-  sm_free( SM );
-
-  return 0;
+    return 0;
 }
